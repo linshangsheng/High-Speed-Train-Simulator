@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>环中国动车之旅</title>
+<style>
+:root{
+  --glass:rgba(10,20,34,.58); --line:rgba(160,220,255,.22); --txt:#eaf6ff; --dim:#8fb0c8;
+  --acc:#4fd8ff; --acc2:#ffcf5a; --warn:#ff6a5a;
+  font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;user-select:none}
+html,body{height:100%;overflow:hidden;background:#06101c;color:var(--txt)}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 10px 30px rgba(0,0,0,.35)}
+
+/* ---- 驾驶室 / 车窗 覆盖层 ---- */
+#cab,#win{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
+#cab.on,#win.on{opacity:1}
+#cab svg{width:100%;height:100%;display:block}
+#win .hole{position:absolute;left:12%;right:12%;top:12%;bottom:22%;border-radius:36px;
+  box-shadow:0 0 0 100vmax #232a33, inset 0 0 0 6px #3a4350, inset 0 0 60px rgba(0,0,0,.35)}
+#win .sill{position:absolute;left:0;right:0;bottom:0;height:22%;background:linear-gradient(#2c343f,#1b2028);border-top:3px solid #46515f}
+#win .sill::after{content:"";position:absolute;left:30%;right:30%;top:14px;height:18px;border-radius:8px;background:#e8e0d0;opacity:.85;box-shadow:0 4px 10px rgba(0,0,0,.4)}
+#drops{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:5}
+#letterbox i{position:fixed;left:0;right:0;height:0;background:#000;transition:height .8s ease;z-index:4;pointer-events:none}
+#letterbox i:first-child{top:0}#letterbox i:last-child{bottom:0}
+body.cinema #letterbox i{height:9vh}
+#caption{position:fixed;left:6vw;bottom:2.6vh;z-index:6;color:#e8eef5;font-size:15px;letter-spacing:6px;opacity:0;transition:opacity .6s;pointer-events:none;text-shadow:0 2px 8px #000}
+body.cinema #caption{opacity:.9}
+body.cinema #info, body.cinema #mapwrap, body.cinema #dash, body.cinema #trip{opacity:.0;transition:opacity .6s}
+body.cinema #info:hover, body.cinema #mapwrap:hover, body.cinema #dash:hover{opacity:1}
+body.cinema #views{opacity:1}
+#vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.38) 100%)}
+#speedfx{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(180,230,255,.18) 100%)}
+body.cabmode #speedfx{display:none}   /* 驾驶室视角下这层高速光晕会盖在两侧仪表屏上，显得发虚 */
+
+/* ---- 左上：区域信息 ---- */
+#info{position:fixed;left:20px;top:18px;display:flex;flex-direction:column;gap:12px;width:min(340px,40vw)}
+#region{padding:14px 18px}
+#region .r1{display:flex;align-items:baseline;gap:10px}
+#region .rname{font-size:30px;font-weight:700;letter-spacing:3px;background:linear-gradient(90deg,#fff,var(--acc));-webkit-background-clip:text;background-clip:text;color:transparent;transition:opacity .4s}
+#region .rsub{font-size:13px;color:var(--dim)}
+#region .next{margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:14px}
+#region .next b{color:var(--acc2);font-size:17px;letter-spacing:1px}
+#region .bar{margin-top:10px;height:5px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden}
+#region .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:5px}
+#views{display:flex;gap:6px;padding:8px;flex-wrap:wrap}
+#views button{flex:1 1 auto;min-width:74px;cursor:pointer;border:1px solid transparent;border-radius:10px;padding:7px 8px;font:inherit;font-size:13px;color:var(--dim);background:rgba(255,255,255,.05);transition:.2s}
+#views button:hover{color:#fff;background:rgba(255,255,255,.12)}
+#views button.on{color:#06202c;background:var(--acc);font-weight:700;box-shadow:0 0 14px rgba(79,216,255,.55)}
+#views button kbd{opacity:.6;margin-right:4px;font:inherit;font-size:11px}
+
+/* ---- 右上：地图 ---- */
+#mapwrap{position:fixed;right:20px;top:18px;padding:10px 10px 8px;width:268px}
+#mapwrap .t{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);padding:0 4px 6px;letter-spacing:1px}
+#mapwrap .t b{color:var(--acc2)}
+#map{display:block;width:246px;height:210px;border-radius:10px;background:radial-gradient(ellipse at 50% 40%,#133250,#0a1829)}
+
+/* ---- 底部：中控台 ---- */
+#dash{position:fixed;left:50%;bottom:12px;transform:translateX(-50%) scale(var(--ds,1));transform-origin:50% 100%;display:flex;align-items:flex-end;gap:12px}
+#gauge{width:300px;height:210px;padding:0;position:relative}
+/* 驾驶室视角：速度表由 3D 仪表屏显示；手柄与按钮移到两侧，露出操纵台 */
+body.cabmode #dash{left:12px;right:12px;bottom:auto;top:52%;transform:translateY(-50%) scale(calc(var(--ds,1) * 0.85));transform-origin:50% 50%;justify-content:space-between;align-items:center}
+body.cabmode #gauge{display:none}
+body.cabmode #trip{display:none}
+#gauge svg{width:100%;height:100%;display:block}
+.cp{padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.cp-title{display:flex;justify-content:space-between;align-items:center;font-size:13px;letter-spacing:2px;color:var(--txt);font-weight:700}
+.cp-title span{font-size:12px;font-weight:600;letter-spacing:1px;color:var(--acc2)}
+.cp-title em{font-style:normal;margin-left:6px}
+#statebadge{padding:1px 8px;border-radius:12px;background:rgba(255,255,255,.12);color:var(--txt)}
+#statebadge.cruise{background:rgba(79,216,255,.25);color:var(--acc)}
+#statebadge.emg{background:rgba(255,106,90,.3);color:#ffb0a8}
+#lever{width:176px}
+#leverbox{display:flex;gap:8px;height:226px}
+#lscale{position:relative;width:44px}
+#lscale .lb{position:absolute;right:0;transform:translateY(-50%);font-size:11px;color:var(--dim);white-space:nowrap}
+#lscale .lb.up{color:#7fe3ff}#lscale .lb.dn{color:#ff9d92}#lscale .lb.zero{color:#fff;font-weight:700}
+#ltrack{position:relative;flex:1;border-radius:12px;background:linear-gradient(#0e3a52,#0b1c2c 48%,#2a1417 56%,#4a1c1c);border:1px solid var(--line);cursor:ns-resize;touch-action:none;overflow:hidden}
+#ltrack::before{content:"";position:absolute;left:50%;top:10px;bottom:10px;width:6px;margin-left:-3px;border-radius:3px;background:rgba(0,0,0,.55);box-shadow:inset 0 0 4px #000}
+#ltrack .tk{position:absolute;left:8px;right:8px;height:1px;background:rgba(255,255,255,.14)}
+#ltrack .tk.zero{background:rgba(255,255,255,.7);height:2px}
+#ltrack .zone{position:absolute;left:0;right:0;text-align:center;font-size:11px;letter-spacing:3px;opacity:.55;pointer-events:none}
+#ltrack .zone.up{top:3px;color:#7fe3ff}#ltrack .zone.dn{bottom:3px;color:#ff9d92}
+#lknob{position:absolute;left:5px;right:5px;height:30px;margin-top:-15px;border-radius:9px;background:linear-gradient(#e9eef3,#a6b1bb 55%,#7c8791);border:1px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.55),0 0 14px rgba(79,216,255,.35);display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 10px;transition:top .08s;pointer-events:none}
+#lknob i{display:block;height:2px;background:rgba(0,0,0,.35);border-radius:1px}
+#lever.brake #lknob{box-shadow:0 4px 10px rgba(0,0,0,.55),0 0 14px rgba(255,106,90,.6)}
+#lever.locked #ltrack{opacity:.55;cursor:not-allowed}
+.cp-hint{font-size:11.5px;line-height:1.6;color:var(--dim);text-align:center}
+.cp-hint b{color:#7fe3ff}.cp-hint b.r{color:#ff9d92}
+#btns{width:250px}
+.btngrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.btngrid button{cursor:pointer;display:grid;grid-template-columns:26px 1fr;grid-template-rows:auto auto;column-gap:6px;align-items:center;text-align:left;border:1px solid var(--line);border-radius:11px;padding:7px 8px;font:inherit;color:var(--txt);background:rgba(255,255,255,.07);transition:.15s}
+.btngrid button i{grid-row:1/3;font-style:normal;font-size:20px;text-align:center}
+.btngrid button b{font-size:12.5px;font-weight:700;letter-spacing:0;white-space:nowrap}
+.btngrid button small{font-size:10px;color:var(--dim);line-height:1.2;white-space:nowrap}
+.btngrid button:hover{background:rgba(255,255,255,.16);transform:translateY(-1px)}
+.btngrid button:active{transform:translateY(1px)}
+.btngrid button.on{background:rgba(79,216,255,.28);border-color:var(--acc);box-shadow:0 0 12px rgba(79,216,255,.4)}
+.btngrid button.danger{border-color:rgba(255,106,90,.55);background:rgba(255,106,90,.16)}
+.btngrid button.danger.on{background:rgba(255,80,60,.55);box-shadow:0 0 16px rgba(255,90,70,.7);animation:blink .8s infinite}
+@keyframes blink{50%{background:rgba(255,80,60,.3)}}
+#cruiseadj{display:none;align-items:center;gap:6px;font-size:12px;color:var(--dim)}
+#cruiseadj.show{display:flex}
+#cruiseadj b{color:var(--acc);font-size:15px}
+#cruiseadj button{cursor:pointer;margin-left:auto;border:1px solid var(--line);background:rgba(255,255,255,.1);color:var(--txt);border-radius:8px;padding:4px 9px;font:inherit;font-size:12px}
+#cruiseadj button+button{margin-left:0}
+#cruiseadj button:hover{background:rgba(255,255,255,.22)}
+
+#guidebtn{align-self:flex-start;cursor:pointer;padding:10px 16px;font:inherit;font-size:13px;color:var(--txt);border-radius:22px}
+#guidebtn:hover{background:rgba(79,216,255,.25)}
+#guide{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:90vh;overflow-y:auto;padding:22px 26px;z-index:12;display:none;font-size:13.5px;line-height:1.75;color:#cfe3f2}
+#guide.show{display:block}
+#guide h3{font-size:19px;letter-spacing:3px;margin-bottom:8px;color:#fff}
+#guide ol{padding-left:20px;display:flex;flex-direction:column;gap:6px}
+#guide b{color:var(--acc2)}#guide u{text-decoration:none;color:#7fe3ff;font-weight:600}
+#guide button{margin-top:14px;cursor:pointer;border:0;border-radius:20px;padding:8px 26px;font:inherit;font-weight:700;color:#06202c;background:var(--acc)}
+#tcard{position:fixed;left:50%;top:84px;transform:translate(-50%,-14px);opacity:0;transition:all .5s;padding:10px 26px;border-radius:22px;font-size:15px;letter-spacing:2px;pointer-events:none;color:#ffe39a}
+#tcard.show{opacity:1;transform:translate(-50%,0)}
+/* ---- 精准停站 ---- */
+#stopbox{position:fixed;left:50%;top:134px;transform:translate(-50%,-10px);opacity:0;transition:opacity .4s,transform .4s;pointer-events:none;min-width:400px;max-width:92vw;padding:10px 18px 11px;border-radius:16px;font-size:13px;color:#cfe3f2}
+#stopbox.show{opacity:1;transform:translate(-50%,0)}
+#stopbox .sh{display:flex;justify-content:space-between;align-items:baseline;gap:16px;letter-spacing:1px}
+#stopbox .sh b{font-size:22px;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:0}
+#stopbox .sb{height:6px;border-radius:3px;background:rgba(255,255,255,.12);margin:7px 0 6px;overflow:hidden}
+#stopbox .sb i{display:block;height:100%;background:linear-gradient(90deg,#4fd8ff,#8ff0c8);transition:width .2s}
+#stopbox .sf{display:flex;justify-content:space-between;gap:16px;font-size:12.5px;color:#7fa0b8}
+#stopbox .ok{color:#8ff0c8}#stopbox .warn{color:#ffc75a}#stopbox .red{color:#ff7a6a}#stopbox .dim{color:#7fa0b8}
+#stopbox .sr{text-align:center;padding:2px 10px}
+#stopbox .st{font-size:30px;color:#ffd257;letter-spacing:6px;text-shadow:0 0 14px rgba(255,200,80,.6)}
+#stopbox .st i{color:rgba(255,255,255,.16);font-style:normal;text-shadow:none}
+#stopbox .sg{font-size:22px;font-weight:800;letter-spacing:6px;color:#fff}
+#stopbox .sd{margin-top:2px}#stopbox .ss{color:#7fa0b8;font-size:12px;margin-top:4px}
+#stopbox .sw{text-align:center;color:#ffe39a;margin-top:6px;line-height:1.6}#stopbox .sw small{color:#7fa0b8}
+body.cinema #stopbox{display:none}
+
+/* ---- 右下：状态 ---- */
+#trip{position:fixed;right:20px;bottom:16px;padding:12px 16px;font-size:12.5px;line-height:1.9;color:var(--dim);text-align:right}
+#trip b{color:var(--txt);font-weight:600}
+
+/* ---- 到站卡片 ---- */
+#card{position:fixed;left:50%;top:22%;transform:translate(-50%,-20px);opacity:0;pointer-events:none;transition:all .7s cubic-bezier(.2,.8,.2,1);text-align:center;padding:22px 46px;min-width:360px}
+#card.show{opacity:1;transform:translate(-50%,0)}
+#card .k{font-size:12px;letter-spacing:6px;color:var(--acc)}
+#card .n{font-size:46px;font-weight:800;letter-spacing:10px;margin:6px 0 4px;background:linear-gradient(180deg,#fff,#9fe4ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+#card .d{font-size:15px;color:#cfe3f2;letter-spacing:1px}
+#card .p{margin-top:10px;font-size:12px;color:var(--acc2)}
+
+/* ---- 开始页 ---- */
+#start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:22px;text-align:center;
+  background:radial-gradient(ellipse at 50% 35%,rgba(20,60,100,.5),rgba(4,10,20,.92));transition:opacity .8s;z-index:20}
+#start.hide{opacity:0;pointer-events:none}
+#start h1{font-size:clamp(34px,6vw,64px);letter-spacing:12px;font-weight:800;background:linear-gradient(90deg,#fff,#7fe0ff 50%,#ffd57a);-webkit-background-clip:text;background-clip:text;color:transparent;padding-left:12px}
+#start p{color:#a8c4d8;letter-spacing:3px;font-size:15px}
+#start .route{max-width:760px;font-size:13px;color:#7fa0b8;line-height:1.9;letter-spacing:1px;padding:0 20px}
+#go{cursor:pointer;border:0;border-radius:40px;padding:15px 54px;font:inherit;font-size:19px;font-weight:700;letter-spacing:6px;color:#06202c;background:linear-gradient(90deg,#4fd8ff,#8ff0c8);box-shadow:0 0 34px rgba(79,216,255,.55);transition:.2s}
+#go:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 0 50px rgba(79,216,255,.8)}
+#loading{font-size:13px;color:#7fa0b8;letter-spacing:2px;min-height:18px}
+#toast{position:fixed;left:50%;top:84px;transform:translateX(-50%);padding:8px 20px;border-radius:20px;font-size:14px;opacity:0;transition:opacity .4s;pointer-events:none}
+#toast.show{opacity:1}
+#pause{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:40px;letter-spacing:12px;background:rgba(0,0,0,.35);z-index:15}
+#pause.show{display:flex}
+
+@media (max-width:900px){
+  #trip{display:none}
+  #mapwrap{transform:scale(.8);transform-origin:top right}
+}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="vig"></div><div id="speedfx"></div>
+
+<div id="cab"><svg viewBox="0 0 1600 900" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a313b"/><stop offset="1" stop-color="#12161c"/></linearGradient>
+    <linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d4a66"/><stop offset="1" stop-color="#0a2236"/></linearGradient>
+    <radialGradient id="glo"><stop offset="0" stop-color="#4fd8ff" stop-opacity=".5"/><stop offset="1" stop-color="#4fd8ff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <!-- 车顶、A 柱 -->
+  <path d="M0 0H1600V70Q800 120 0 70Z" fill="#161a20"/>
+  <path d="M0 70Q20 400 70 900H0Z" fill="#171b21"/><path d="M1600 70Q1580 400 1530 900H1600Z" fill="#171b21"/>
+  <path d="M0 70Q120 260 190 560L120 560Q70 330 0 190Z" fill="#20262e" opacity=".9"/>
+  <path d="M1600 70Q1480 260 1410 560L1480 560Q1530 330 1600 190Z" fill="#20262e" opacity=".9"/>
+  <!-- 控制台台面（真正的控制器在 HTML 中控台上） -->
+  <path d="M0 800Q400 740 800 745Q1200 740 1600 800V900H0Z" fill="url(#dg)"/>
+</svg></div>
+<div id="win"><div class="hole"></div><div class="sill"></div></div>
+<canvas id="drops"></canvas>
+<div id="letterbox"><i></i><i></i></div><div id="caption"></div><div id="fade"></div>
+
+<div id="info">
+  <div id="region" class="glass">
+    <div class="r1"><div class="rname" id="rname">云南</div><div class="rsub" id="rsub">春城昆明 · 出发</div></div>
+    <div class="next"><span>下一站 <b id="nextcity">大理</b></span><span id="nextdist">0 km</span></div>
+    <div class="bar"><i id="legbar"></i></div>
+  </div>
+  <div id="views" class="glass"></div>
+  <button id="guidebtn" class="glass">? 操作说明 · 怎么开车</button>
+</div>
+
+<div id="mapwrap" class="glass">
+  <div class="t"><span>环中国线路</span><span><b id="pct">0%</b> 完成</span></div>
+  <canvas id="map" width="492" height="420"></canvas>
+</div>
+
+<div id="dash">
+  <div id="lever" class="glass cp">
+    <div class="cp-title">主控手柄<span id="notch">惰行</span></div>
+    <div id="leverbox">
+      <div id="lscale"></div>
+      <div id="ltrack"><div class="zone up">牵引</div><div class="zone dn">制动</div><div id="lknob"><i></i><i></i><i></i></div></div>
+    </div>
+    <div class="cp-hint"><b>向上推 = 加速</b><br><b class="r">向下拉 = 减速制动</b><br>拖动手柄 · 滚轮 · 点击刻度</div>
+  </div>
+  <div id="gauge" class="glass"></div>
+  <div id="btns" class="glass cp">
+    <div class="cp-title">控制按钮<span><em id="statebadge">待发</em> <em id="clock">06:30</em></span></div>
+    <div class="btngrid">
+      <button id="bHorn"><i>🔔</i><b>鸣笛</b><small>点击鸣笛</small></button>
+      <button id="bEmg" class="danger"><i>⛔</i><b>紧急制动</b><small id="emgsub">点击立即刹停</small></button>
+      <button id="bCruise"><i>🎯</i><b>定速巡航</b><small id="cruisesub">保持当前速度</small></button>
+      <button id="bTime"><i>🌗</i><b>切换时间</b><small id="timesub">自动昼夜</small></button>
+      <button id="bMute"><i>🔊</i><b>声音</b><small id="mutesub">全部开启</small></button>
+      <button id="bWeather"><i>⛅</i><b>天气</b><small id="wxsub">自动</small></button>
+      <button id="bQuality"><i>✨</i><b>画质</b><small id="qsub">高</small></button>
+      <button id="bPause"><i>⏸</i><b>暂停</b><small id="pausesub">点击暂停</small></button>
+    </div>
+    <div id="cruiseadj"><span>巡航目标 <b id="ctarget">0</b> km/h</span><button id="cMinus">−10</button><button id="cPlus">＋10</button></div>
+  </div>
+</div>
+<div id="guide" class="glass">
+  <h3>中控台使用说明</h3>
+  <ol>
+    <li><b>主控手柄</b>（左）：把手柄<u>向上推</u>，列车牵引加速，推得越高越快（1–10 档）；推回中间“惰行”档，列车靠惯性滑行；<u>向下拉</u>进入制动，拉得越低刹得越狠（1–7 档）。可拖动旋钮、点击刻度，或在手柄上滚动滚轮。</li>
+    <li><b>速度仪表</b>（中）：指针与数字显示当前时速，最高 350 km/h。</li>
+    <li><b>鸣笛</b>：过站、进隧道前提醒用。<b>声音</b>：点击循环——全部开启（含中文到站播报）/ 关闭播报只留音效 / 静音。临近车站会预告，经过车站会播报“××站到了”。<b>紧急制动</b>：立即最大力度刹车，停稳后再点一次解除。</li>
+    <li><b>定速巡航</b>：自动保持当前速度；用 −10 / ＋10 调整目标速度，再次扳动手柄会退出巡航。</li>
+    <li><b>切换时间</b>：自动昼夜 / 清晨 / 正午 / 黄昏 / 深夜。<b>天气</b>：自动（随地区变化：云南多雨、西藏飘雪、新疆沙尘、江南雷暴……）或手动选晴 / 多云 / 小雨 / 雷暴 / 下雪 / 大雾 / 沙尘。<b>画质</b>：高 / 中 / 低；帧率不够时会自动降档。<b>视角</b>（左上角七个按钮）：驾驶室（3D 驾驶台 + 实时仪表）、车顶、侧面、迎面、俯瞰、车窗（坐在 3 号车厢里看风景）、电影模式（自动切换机位）。</li>
+    <li><b>精准停站</b>（可选玩法）：进站时屏幕上方会出现“停车位置标”的剩余距离、建议制动档位和推荐速度。在站台上的蓝框“停 8”标志处停稳即可评分：误差 ≤0.5 m 为完美停车 ★★★。停稳后自动开门上下客，推手柄即可关门发车。不想停就直接开过去，不扣分；定速巡航时不提示。</li>
+  </ol>
+  <button id="guideclose">知道了</button>
+</div>
+
+<div id="trip" class="glass">已行驶 <b id="odo">0</b> km<br>全程 <b id="total">0</b> km<br>已到达 <b id="visited">0</b> / <b id="ncity">0</b> 站</div>
+
+<div id="card" class="glass"><div class="k">ARRIVAL · 到达</div><div class="n" id="cn">北京</div><div class="d" id="cd"></div><div class="p" id="cp"></div></div>
+<div id="toast" class="glass"></div>
+<div id="tcard" class="glass"></div>
+<div id="stopbox" class="glass"></div>
+<div id="pause">已暂停<small style="display:block;font-size:14px;letter-spacing:4px;margin-top:10px;opacity:.7">点击控制台上的“暂停”按钮继续</small></div>
+
+<div id="start">
+  <h1>环中国动车之旅</h1>
+  <p>从春城昆明出发，穿越高原、戈壁、草原与江南，绕行祖国一周</p>
+  <div class="route">昆明 → 大理 → 林芝 → 拉萨 → 日喀则 → 阿里 → 喀什 → 库尔勒 → 乌鲁木齐 → 敦煌 → 兰州 → 呼和浩特 → 呼伦贝尔 → 哈尔滨 → 沈阳 → 北京 → 青岛 → 上海 → 杭州 → 广州 → 三亚 → 昆明</div>
+  <button id="go" disabled>载入中…</button>
+  <div id="loading">正在加载 3D 引擎…</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="js/colorfix.js"></script>
+<script src="js/route.js"></script>
+<script src="js/noise.js"></script>
+<script src="js/geomutil.js"></script>
+<script src="js/tunnels.js"></script>
+<script src="js/rivers.js"></script>
+<script src="js/terrain_core.js"></script>
+<script src="js/sky.js"></script>
+<script src="js/track.js"></script>
+<script src="js/terrain_mesh.js"></script>
+<script src="js/flora.js"></script>
+<script src="js/bkit.js"></script>
+<script src="js/btex.js"></script>
+<script src="js/houses.js"></script>
+<script src="js/towers.js"></script>
+<script src="js/landmarks.js"></script>
+<script src="js/line.js"></script>
+<script src="js/bridges.js"></script>
+<script src="js/scenery.js"></script>
+<script src="js/scenery_regions.js"></script>
+<script src="js/scenery_regions2.js"></script>
+<script src="js/cities.js"></script>
+<script src="js/trainshape.js"></script>
+<script src="js/livery.js"></script>
+<script src="js/train.js"></script>
+<script src="js/traffic.js"></script>
+<script src="js/cab.js"></script>
+<script src="js/interior.js"></script>
+<script src="js/stops.js"></script>
+<script src="js/cinema.js"></script>
+<script src="js/weather.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/drops.js"></script>
+<script src="js/voice.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/post.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
